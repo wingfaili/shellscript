@@ -1,0 +1,70 @@
+#!/usr/bin/expect
+
+set host [lindex $argv 0]
+set uname [lindex $argv 1]
+set pass [lindex $argv 2]
+set com "service-module "
+set timeout 3
+
+log_user 0
+spawn telnet $host
+expect {
+	eof {
+send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+send_user "\n> INFORMATION : This router does not exist ......                    >"
+send_user "\n> ACTION : Please press \"n\" to proceed next step                     >"
+send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n"
+exit
+	}
+}
+expect "Username:" {
+	send "$uname\r"
+}
+expect -re "Password*" {
+	send "$pass\r"
+}
+expect "Authentication failed" {
+	exit 0
+}
+expect -re ">" {
+	send "en\r"
+}
+expect -re "Password*" {
+	send "$pass\r"
+}
+expect -re "#" {
+	send "sh ip int brief | i Service-Engin\r"
+}
+expect "Service-Engi"
+expect -re "#" {
+	set outputName $expect_out(buffer)
+	set outputName [string range $outputName 3 19]
+}
+expect -re "#"
+set com "service-module "
+append com $outputName
+append com " status\r"
+send $com
+expect "Do you want to proceed with shutdown?" {
+	send "\r"
+}
+expect "WARNING: Confirm that the service-module status shows 'is Shutdown' before removing the module or powering off the system !" {
+	send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+	send_user "\n> INFORMATION (1/3) : CUE shutdown is in progress ......             >"
+	send_user "\n> ACTION : Wait 60 seconds and press \"n\" to verify!                  >"
+}
+expect "Invalid input" {
+	send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+	send_user "\n> INFORMATION (1/3) : No Service-Engine type CUE in this device      >"
+}
+expect "is already shutdown" {
+	send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+	send_user "\n> INFORMATION (1/3) : Service-Engine type CUE already shutdown       >"
+}
+# End
+
+
+
+
+
+
