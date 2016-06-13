@@ -1,0 +1,85 @@
+#!/usr/bin/expect
+
+set host [lindex $argv 0]
+set uname [lindex $argv 1]
+set pass [lindex $argv 2]
+
+#set command1 "show vpn flow"
+#set command2 "clear vpn flow tunnel-id"
+set timeout 5
+
+log_user 0
+spawn ssh -l $uname $host
+expect {
+	eof {
+send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+send_user "\n> INFORMATION : Firewall does not exist  ......                      >"
+send_user "\n> ACTION : Please press \"n\" to proceed next step                     >"
+send_user "\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n"
+exit
+	}
+}
+expect {
+	"Are you sure you want to continue connecting (yes/no)?" {
+	send "yes\r"
+	exp_continue
+	}
+}
+expect "Password*" {
+	send "$pass\r"
+	exp_continue
+}
+
+set timeout 5
+set lineterminationChar "\r"
+set command1 "show vpn flow"
+send $command1\r
+#send "show vpn flow\r"
+expect {
+	$lineterminationChar {append output1 $expect_out(buffer); exp_continue}
+	eof {append output1 $expect_out(buffer); exp_continue}
+}
+
+puts $output1
+
+foreach line [split $output1 \n] {
+    if {[string match *init* $line]} {
+        #puts $line
+
+				set tunnel_id [string range $line 0 0]
+				set IKE_Tunnel_Name "[string toupper [string range $host 2 9]]_[string range $line 11 13]_IKE[string range $line 14 14]"
+				set IPSEC_Tunnel_Name [string range $line 6 14]
+
+				#Clear vpn flow tunnel-id x
+				set command2 "clear vpn flow tunnel-id"
+				send "$command2 $tunnel_id\r"
+				expect {
+					$lineterminationChar {append output2 $expect_out(buffer); exp_continue}
+					eof {append output2 $expect_out(buffer); exp_continue}
+				}
+				puts $output2
+
+
+				#Test vpn ike-sa gateway
+				set command3 "test vpn ike-sa gateway"
+				send "$command3 $IKE_Tunnel_Name\r"
+				expect {
+					$lineterminationChar {append output3 $expect_out(buffer); exp_continue}
+					eof {append output3 $expect_out(buffer); exp_continue}
+				}
+				puts $output3
+
+				#Test vpn ipsec-sa tunnel
+				set command4 "test vpn ipsec-sa tunnel"
+				send "$command4 $IPSEC_Tunnel_Name\r"
+				expect {
+					$lineterminationChar {append output4 $expect_out(buffer); exp_continue}
+					eof {append output4 $expect_out(buffer); exp_continue}
+				}
+				puts $output4
+    }
+}
+
+exit
+
+# End
