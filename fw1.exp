@@ -1,0 +1,165 @@
+#!/bin/sh
+# \
+exec tclsh "$0"  ${1+"$@"}
+#!/usr/bin/expect
+#
+# remote ls
+# simple remote directory lister
+#
+# Copyright 2004 ActiveState, a division of Sophos
+# All rights reserved.
+#
+# This application logs into a remote host and returns the files
+# and directories of the default cwd.
+#
+
+# This is required to declare that we will use Expect
+package require Expect
+
+# Turn off echo logging to the user by default
+exp_log_user 0
+
+# This special variable used by the ActiveState Expect for Windows
+# port will enable actual viewing of the controlled console.
+# Otherwise it remains hidden (default).
+#set ::exp::winnt_debug 1
+
+# This is the magic timeout variable used by Expect (time in seconds).
+set timeout 10
+
+# We want to operate very simply - force a dumb terminal mode
+#set env(TERM) dumb
+
+# The default option settings
+set host [lindex $argv 0]
+set uname [lindex $argv 1]
+set pass [lindex $argv 2]
+
+proc timedout {{msg {none}}} {
+    # We call this procedure when a timeout occurs receiving data.
+    # It outputs the reason and some debugging info so we might be
+    # able to better pinpoint the reason for the timeout.
+    send_user "Timed out (reason: $msg)\n"
+    if {[info exists ::expect_out]} {
+	     parray ::expect_out
+    }
+    exit 1
+}
+
+set pid [spawn ssh $uname@$host]
+set id $spawn_id
+
+# expect -i $id timeout {
+  # timedout "in user login"
+# } eof {
+  # timedout "spawn failed with eof on login"
+# } -re "(login as).*" {
+  # exp_send -i $id -- "$uname\r"
+# }
+
+set logged_in 0
+while {!$logged_in} {
+  # In this loop, we try to capture the various states towards a proper
+  # login.  More Error handling (like bad password or username) could be
+  # added.
+  expect -i $id timeout {
+  	# we encountered a timeout - none of the other branches matched
+  	# within our established timeout timeframe.
+  	timedout "in login process"
+  	break
+  } eof {
+  	# for some reason we lost connection to the application.
+  	timedout "wrong password"
+  	break
+  } "Are you sure you want to continue connecting (yes/no)? " {
+  	# ssh request for a box we don't know yet
+  	exp_send -i $id -- "yes\r"
+  } "*assword*" {
+  	# we received a request to provide the password
+  	exp_send -i $id -- "$pass\r"
+  } -re "(%|#|>|\\$) $" {
+  	# we received the user prompt.  At this point we can move on.
+  	set logged_in 1
+    puts $expect_out(buffer)
+  }
+}
+
+set output ""
+if {$logged_in} {
+  exp_send -i $id -- "show vpn flow\r"
+  expect -i $id timeout {timedout "on prompt"} -re "(%|#|>|\\$) $" {
+    set output $expect_out(buffer)
+    puts $output
+  }
+
+
+  foreach line [split $output \n] {
+      if {[string match *init* $line]} {
+  				set output2 ""
+  				set output3 ""
+  				set output4 ""
+  				# puts $line
+
+  				set tunnel_id [string range $line 0 0]
+  				set IKE_Tunnel_Name "[string toupper [string range $host 2 9]]_[string range $line 11 13]_IKE[string range $line 14 14]"
+  				set IPSEC_Tunnel_Name [string range $line 6 14]
+
+          # puts "$tunnel_id\n"
+          # puts "$IKE_Tunnel_Name\n"
+          # puts "$IPSEC_Tunnel_Name\n"
+
+
+          # #Clear vpn flow tunnel-id x
+  				# #set timeout 5
+  				set command2 "clear vpn flow tunnel-id"
+  				exp_send -i $id -- "$command2 $tunnel_id\r"
+          expect -i $id timeout {timedout "on prompt"} -re "(%|#|>|\\$) $" {
+            set output2 $expect_out(buffer)
+            puts $output2
+          }
+          #
+  				# #Test vpn ike-sa gateway
+  				# #set timeout 5
+  				set command3 "test vpn ike-sa gateway"
+          #set command4 "test vpn ipsec-sa tunnel"
+          exp_send -i $id -- "$command3 $IKE_Tunnel_Name\r"
+          expect -i $id timeout {timedout "on prompt2"} -re "(%|#|>|\\$) $" {
+            set output3 $expect_out(buffer)
+            puts $output3
+          }
+          #
+  				# #Test vpn ipsec-sa tunnel
+  				# #set timeout 5
+          set command4 "test vpn ipsec-sa tunnel"
+          exp_send -i $id -- "$command4 $IPSEC_Tunnel_Name\r"
+          expect -i $id timeout {timedout "on prompt"} -re "(%|#|>|\\$) $" {
+            set output4 $expect_out(buffer)
+            puts $output4
+          }
+      }
+  }
+
+
+
+
+
+
+
+
+    exp_send -i $id -- "exit\r"
+}
+
+
+
+#set output1 ""
+#set timeout 5
+#set lineterminationChar "\r"
+#set command1 "show vpn flow"
+#exp_send -i $id -- "$command1\r"
+#send "show vpn flow\r"
+#expect {
+	#$lineterminationChar {append output1 $expect_out(buffer); exp_continue}
+	#eof {append output1 $expect_out(buffer); exp_continue}
+#}
+
+#puts $output1
